@@ -141,17 +141,13 @@ No external services beyond what's listed. No Python in this stack, though I use
 
 ```
 .
-├── asset-catalog/
-│   ├── README.md                                 # detailed case study
-│   ├── workflows/
-│   │   ├── Asset_Catalog_Sync.public.json
-│   │   ├── Asset_Catalog_Query_Form.public.json
-│   │   └── Asset_Catalog_Query_API.public.json
-│   └── images/
-├── images/
-│   └── metrics.png                               # n8n execution dashboard
-├── LICENSE
-└── README.md                                     # this file
+├── Workflows/
+│   └── Asset_Catalog/
+│       ├── README.md                          
+│       ├── Asset_Catalog_Sync.public.json
+│       ├── Asset_Catalog_Query_Form.public.json
+│       └── Asset_Catalog_Query_API.public.json
+└── README.md # detailed case study
 ```
 
 All workflows in this repo are sanitized. Internal URLs, credential IDs, webhook UUIDs, data table IDs, Microsoft Teams identifiers, and team or people names have been replaced with placeholders. The structure and logic match the production versions.
