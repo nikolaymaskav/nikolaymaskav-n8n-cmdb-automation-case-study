@@ -19,7 +19,6 @@ The narrower technical problem under that: the datalake export was a single 18 M
 
 Three n8n workflows.
 
-![architecture](./images/architecture.png)
 
 ```
                  ┌────────────────────────┐
