@@ -1,0 +1,292 @@
+{
+  "name": "Asset Catalog Query API",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "YOUR_WEBHOOK_UUID",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": false
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "284ed828-240d-4a55-a00c-4b85283f2f24",
+      "name": "1. API Request",
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "REPLACE_WITH_YOUR_CREDENTIAL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_YOUR_DATA_TABLE_ID",
+          "mode": "list",
+          "cachedResultName": "asset_catalog"
+        },
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        208,
+        0
+      ],
+      "id": "3d77cd1c-2bc3-47f1-ac18-259e17b31aac",
+      "name": "2. Get asset_catalog"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// Asset Catalog Query API ,  Filter and Build JSON Response\n// ============================================================\n\n// --- GRAB WEBHOOK BODY ---\n// If your Webhook node is renamed, update the string below to match.\nconst webhookData = $('1. API Request').first().json;\nconst body = webhookData.body || {};\nconst filters = body.filters || {};\n\n// --- GRAB ALL ROWS FROM DATA TABLE ---\nconst allRows = $input.all().map(item => item.json);\n\n// --- FILTER HELPERS ---\nconst contains = (rowValue, searchText) => {\n    if (!searchText || !searchText.toString().trim()) return true;\n    if (rowValue === null || rowValue === undefined) return false;\n    return rowValue.toString().toLowerCase().includes(searchText.toString().toLowerCase().trim());\n};\n\nconst equals = (rowValue, searchText) => {\n    if (!searchText || !searchText.toString().trim()) return true;\n    if (rowValue === null || rowValue === undefined) return false;\n    return rowValue.toString().toLowerCase() === searchText.toString().toLowerCase().trim();\n};\n\n// --- APPLY FILTERS ---\n// Semantics must match Query Form exactly for consistency\nconst filtered = allRows.filter(row =>\n    contains(row.asset_id, filters.asset_id) &&\n    contains(row.asset_name, filters.asset_name) &&\n    contains(row.owning_team, filters.admin_group) &&\n    contains(row.asset_type, filters.asset_type) &&\n    equals(row.status, filters.status) &&\n    contains(row.service_groue, filters.service_groue) &&\n    contains(row.customer, filters.customer) &&\n    contains(row.business_unit, filters.business_unit) &&\n    equals(row.monitoring_enabled, filters.monitoring_enabled) &&\n    equals(row.scanning_enabled, filters.scanning_enabled) &&\n    equals(row.is_critical, filters.is_critical) &&\n    equals(row.is_external, filters.is_external)\n);\n\n// --- APPLY LIMIT ---\nconst requestedLimit = parseInt(body.limit);\nconst limit = Math.min(\n    isNaN(requestedLimit) || requestedLimit <= 0 ? 1000 : requestedLimit,\n    5000\n);\nconst results = filtered.slice(0, limit);\n\n// --- STRIP TO PUBLIC CONTRACT FIELDS ---\n// Consumers only depend on these. Internal fields (id, createdAt, updatedAt)\n// intentionally excluded from the response contract.\nconst publicFields = [\n    'asset_id', 'asset_name', 'display_name', 'asset_type', 'status',\n    'service_category', 'service_groue', 'owning_team',\n    'service_tier', 'customer', 'business_unit',\n    'risk_tier', 'risk_status', 'monitoring_enabled', 'scanning_enabled',\n    'is_critical', 'is_external'\n];\n\nconst cleanResults = results.map(r => {\n    const out = {};\n    publicFields.forEach(f => { out[f] = r[f] ?? null; });\n    return out;\n});\n\n// --- BUILD RESPONSE ---\nconst response = {\n    success: true,\n    query: {\n        filters_applied: filters,\n        limit: limit\n    },\n    result: {\n        total_matched: filtered.length,\n        returned: results.length,\n        truncated: filtered.length > limit,\n        data: cleanResults\n    },\n    meta: {\n        data_source: 'asset_catalog',\n        refreshed_by: 'Asset Catalog Datalake Sync',\n        freshness_note: 'Refreshed weekday mornings from AWS datalake',\n        generated_at: new Date().toISOString()\n    }\n};\n\nreturn [{ json: response }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "320ebf49-b9bd-49e9-87e8-6e671178bd0a",
+      "name": "3. Filter + Build JSON"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        736,
+        -432
+      ],
+      "id": "2ec9e1bc-2d23-4f9d-a0e6-83f0354d87fe",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "const errorData = $input.first().json;\n\nconst response = {\n    success: false,\n    error: {\n        message: 'An error occurred processing your query',\n        details: errorData.execution?.error?.message || 'Unknown internal error',\n        timestamp: new Date().toISOString()\n    }\n};\n\nreturn [{ json: response }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        912,
+        -432
+      ],
+      "id": "e3880c12-eeb5-43bb-9338-93092c243488",
+      "name": "Format Error"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        624,
+        0
+      ],
+      "id": "68a7a375-8707-4e31-89f4-16afae0719e3",
+      "name": "4. Respond 200 JSON"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 500,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1120,
+        -432
+      ],
+      "id": "3ff08dbc-4b53-4bc5-be95-edb1c243a1df",
+      "name": "Respond 500 JSON"
+    },
+    {
+      "parameters": {
+        "content": "# Asset Catalog QUERY API (WEBHOOK)\n\nMachine-facing JSON API for the asset catalog.\nPOST /webhook/<uuid> with filters, matching assets returned as JSON.\n\nAuth: x-api-key header (store in your secrets manager)\nData source: asset_catalog (populated by Asset Catalog Datalake Sync)\nPair workflow: Asset Catalog Query Form (same data, HTML output for humans)\n\nDefault limit 1000 rows, max 5000. Beyond that, narrow the filter.\n\nOwner: [Owner]",
+        "height": 272,
+        "width": 624
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -48,
+        -752
+      ],
+      "id": "c9965555-d27a-437a-9fcc-3da9da5e9821",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## ENTRY POINT\nPOST /webhook/asset_catalog-query ,  requires x-api-key header.\n\nBody schema:\n{\n  \"filters\": { asset_id, asset_name, admin_group, asset_type, status,\n               service_groue, customer, business_unit,\n               monitoring_enabled, scanning_enabled, is_critical, is_external },\n  \"limit\": N\n}\n\nAll filter fields optional. Empty body returns everything up to limit.\nPOST (not GET) because complex filter objects are cleaner in JSON body.",
+        "height": 656,
+        "width": 256,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        -448
+      ],
+      "id": "ae568b42-90a4-484f-b59b-431bc6be7000",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "## DATA SOURCE\nReads all ~88k rows from asset_catalog.\nNo filtering here ,  filtering happens in JS for flexibility.\nSame data source as Query Form.",
+        "height": 688,
+        "width": 208,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        176,
+        -480
+      ],
+      "id": "b7540d42-78ba-40ee-b5d6-0efdb0e01866",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "## FILTER + FORMAT\n- Applies contains/equals logic per field (matches Query Form semantics)\n- Strips internal fields (id, createdAt, updatedAt) from response\n- Enforces 5000-row hard cap\n- Returns standardized envelope: {success, query, result, meta}\n\nContract is stable ,  adding new filter fields is non-breaking.\nRenaming or removing existing fields IS breaking for consumers.",
+        "height": 688,
+        "width": 208,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        384,
+        -480
+      ],
+      "id": "9a9deb50-083f-4c94-91e6-0e7ed63c1653",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "## SUCCESS RESPONSE\nHTTP 200 with JSON body.\nContent-Type: application/json",
+        "height": 336,
+        "color": "#5E0CB0"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        592,
+        -128
+      ],
+      "id": "7a64243f-d478-4e7f-b6ed-9eb430e7a5e2",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "content": "## ERROR HANDLING\nCatches any upstream failure (post-auth).\nReturns clean {success: false, error: {...}} with HTTP 500.\nPrevents consumers from seeing raw n8n stack traces.\n\nNote: auth failures (bad or missing x-api-key) are handled by n8n's\nHeader Auth layer directly ,  they never reach this branch.",
+        "height": 560,
+        "width": 880,
+        "color": "#AE1323"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        592,
+        -688
+      ],
+      "id": "196c54c0-a804-49d0-a2f8-120f0a845e37",
+      "name": "Sticky Note5"
+    }
+  ],
+  "connections": {
+    "1. API Request": {
+      "main": [
+        [
+          {
+            "node": "2. Get asset_catalog",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. Get asset_catalog": {
+      "main": [
+        [
+          {
+            "node": "3. Filter + Build JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Format Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3. Filter + Build JSON": {
+      "main": [
+        [
+          {
+            "node": "4. Respond 200 JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Error": {
+      "main": [
+        [
+          {
+            "node": "Respond 500 JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  }
+}

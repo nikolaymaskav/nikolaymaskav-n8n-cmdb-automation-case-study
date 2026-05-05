@@ -1,0 +1,241 @@
+{
+  "name": "Asset Catalog Query Form",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// Asset Catalog Query Form - Filter and Format\n// Reads form input + all asset_catalog rows, returns HTML response\n// ============================================================\n\n// --- GRAB FORM INPUT ---\n// If your Form Trigger node is named differently, change the string below.\nconst formInput = $('1. Form Query').first().json;\n\n// --- GRAB ALL DATA TABLE ROWS ---\nconst allRows = $input.all().map(item => item.json);\n\n// --- FILTER HELPERS ---\n// Case-insensitive partial match. Empty filter = pass.\nconst contains = (rowValue, searchText) => {\n    if (!searchText || !searchText.toString().trim()) return true;\n    if (rowValue === null || rowValue === undefined) return false;\n    return rowValue.toString().toLowerCase().includes(searchText.toString().toLowerCase().trim());\n};\n\n// Case-insensitive exact match. Empty filter = pass.\nconst equals = (rowValue, searchText) => {\n    if (!searchText || !searchText.toString().trim()) return true;\n    if (rowValue === null || rowValue === undefined) return false;\n    return rowValue.toString().toLowerCase() === searchText.toString().toLowerCase().trim();\n};\n\n// --- APPLY FILTERS ---\n// Text fields: partial match (contains)\n// Dropdown fields: exact match (equals)\nconst filtered = allRows.filter(row =>\n    contains(row.asset_id, formInput.asset_id) &&\n    contains(row.asset_name, formInput.asset_name) &&\n    contains(row.owning_team, formInput.admin_group) &&\n    contains(row.asset_type, formInput.asset_type) &&\n    equals(row.status, formInput.status) &&\n    contains(row.service_groue, formInput.service_groue) &&\n    contains(row.customer, formInput.customer) &&\n    contains(row.business_unit, formInput.business_unit) &&\n    equals(row.monitoring_enabled, formInput.monitoring_enabled) &&\n    equals(row.scanning_enabled, formInput.scanning_enabled) &&\n    equals(row.is_critical, formInput.is_critical) &&\n    equals(row.is_external, formInput.is_external)\n);\n\n// --- APPLY RESULT LIMIT ---\nconst requestedLimit = parseInt(formInput.result_limit);\nconst limit = Math.min(isNaN(requestedLimit) || requestedLimit <= 0 ? 100 : requestedLimit, 1000);\nconst results = filtered.slice(0, limit);\n\n// --- BUILD FILTER SUMMARY (for display) ---\nconst activeFilters = [];\nif (formInput.asset_id?.trim()) activeFilters.push(`asset_id contains \"${formInput.asset_id}\"`);\nif (formInput.asset_name?.trim()) activeFilters.push(`asset_name contains \"${formInput.asset_name}\"`);\nif (formInput.admin_group?.trim()) activeFilters.push(`admin_group contains \"${formInput.admin_group}\"`);\nif (formInput.asset_type?.trim()) activeFilters.push(`asset_type contains \"${formInput.asset_type}\"`);\nif (formInput.status?.trim()) activeFilters.push(`status = \"${formInput.status}\"`);\nif (formInput.service_groue?.trim()) activeFilters.push(`service_groue contains \"${formInput.service_groue}\"`);\nif (formInput.customer?.trim()) activeFilters.push(`customer contains \"${formInput.customer}\"`);\nif (formInput.business_unit?.trim()) activeFilters.push(`business_unit contains \"${formInput.business_unit}\"`);\nif (formInput.monitoring_enabled?.trim()) activeFilters.push(`monitoring_enabled = \"${formInput.monitoring_enabled}\"`);\nif (formInput.scanning_enabled?.trim()) activeFilters.push(`scanning_enabled = \"${formInput.scanning_enabled}\"`);\nif (formInput.is_critical?.trim()) activeFilters.push(`is_critical = \"${formInput.is_critical}\"`);\nif (formInput.is_external?.trim()) activeFilters.push(`is_external = \"${formInput.is_external}\"`);\nconst filterSummary = activeFilters.length > 0 ? activeFilters.join(' AND ') : 'No filters (showing all)';\n\n// --- ESCAPE HTML (prevent XSS from data values) ---\nconst escapeHtml = (val) => {\n    if (val === null || val === undefined) return '';\n    return val.toString()\n        .replace(/&/g, '&amp;')\n        .replace(/</g, '&lt;')\n        .replace(/>/g, '&gt;')\n        .replace(/\"/g, '&quot;')\n        .replace(/'/g, '&#039;');\n};\n\n// --- BUILD CSV FOR DOWNLOAD ---\nconst csvEscape = v => {\n    if (v === null || v === undefined) return '';\n    const s = v.toString();\n    if (s.includes(',') || s.includes('\"') || s.includes('\\n') || s.includes('\\r')) {\n        return '\"' + s.replace(/\"/g, '\"\"') + '\"';\n    }\n    return s;\n};\n\nconst csvHeaders = [\n    'asset_id', 'asset_name', 'display_name', 'asset_type', 'status',\n    'service_category', 'service_groue', 'owning_team',\n    'service_tier', 'customer', 'business_unit',\n    'risk_tier', 'risk_status', 'monitoring_enabled', 'scanning_enabled',\n    'is_critical', 'is_external'\n];\nconst csvLines = [csvHeaders.join(',')];\nfiltered.forEach(r => {\n    csvLines.push(csvHeaders.map(h => csvEscape(r[h])).join(','));\n});\nconst csvContent = csvLines.join('\\n');\nconst csvDataUri = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvContent);\nconst downloadFilename = `asset_catalog_query_${new Date().toISOString().split('T')[0]}.csv`;\n\n// --- BUILD HTML RESPONSE ---\nlet html;\n\nif (results.length === 0) {\n    html = `<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>Asset Catalog Query Results ,  No Match</title>\n<style>\n    body { font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif; margin: 20px; background: #fafafa; color: #333; max-width: 1400px; }\n    h2 { color: #222; margin-bottom: 10px; }\n    .summary { background: #fff4f4; padding: 12px 15px; border-radius: 4px; border-left: 3px solid #d9534f; margin-bottom: 15px; }\n    .summary div { margin: 3px 0; font-size: 14px; }\n    .hint { color: #666; font-size: 13px; }\n</style>\n</head>\n<body>\n    <h2>Asset Catalog Query Results</h2>\n    <div class=\"summary\">\n        <div><strong>Filters:</strong> ${escapeHtml(filterSummary)}</div>\n        <div><strong>Matched:</strong> 0 assets</div>\n    </div>\n    <p class=\"hint\">No assets matched your query. Try broader filters or check for typos.</p>\n</body>\n</html>`;\n} else {\n    const tableRows = results.map(r => `<tr>\n        <td>${escapeHtml(r.asset_id)}</td>\n        <td>${escapeHtml(r.asset_name)}</td>\n        <td>${escapeHtml(r.asset_type)}</td>\n        <td>${escapeHtml(r.status)}</td>\n        <td>${escapeHtml(r.owning_team)}</td>\n        <td>${escapeHtml(r.customer)}</td>\n        <td>${escapeHtml(r.service_groue)}</td>\n        <td>${escapeHtml(r.monitoring_enabled)}</td>\n        <td>${escapeHtml(r.scanning_enabled)}</td>\n        <td>${escapeHtml(r.is_critical)}</td>\n    </tr>`).join('');\n\n    const truncatedNote = filtered.length > limit\n        ? ` (showing first ${limit} in table; CSV download contains all ${filtered.length.toLocaleString()})`\n        : '';\n\n    html = `<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>Asset Catalog Query Results</title>\n<style>\n    body { font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, sans-serif; margin: 20px; background: #fafafa; color: #333; max-width: 1600px; }\n    h2 { color: #222; margin-bottom: 10px; }\n    table { border-collapse: collapse; width: 100%; margin-top: 15px; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.05); font-size: 13px; }\n    th, td { border: 1px solid #e0e0e0; padding: 8px 10px; text-align: left; vertical-align: top; }\n    th { background: #f4f4f4; font-weight: 600; position: sticky; top: 0; }\n    tr:nth-child(even) { background: #fafafa; }\n    tr:hover { background: #eef5ff; }\n    .summary { background: #eef5ff; padding: 12px 15px; border-radius: 4px; margin-bottom: 15px; border-left: 3px solid #4a90e2; }\n    .summary div { margin: 3px 0; font-size: 14px; }\n    .download-btn { display: inline-block; background: #4a90e2; color: white; padding: 8px 16px; border-radius: 4px; text-decoration: none; margin-top: 8px; font-size: 13px; font-weight: 500; }\n    .download-btn:hover { background: #357ab8; }\n    .meta { color: #888; font-size: 12px; margin-top: 20px; }\n</style>\n</head>\n<body>\n    <h2>Asset Catalog Query Results</h2>\n    <div class=\"summary\">\n        <div><strong>Filters:</strong> ${escapeHtml(filterSummary)}</div>\n        <div><strong>Matched:</strong> ${filtered.length.toLocaleString()} asset${filtered.length === 1 ? '' : 's'}${truncatedNote}</div>\n        <div><a class=\"download-btn\" href=\"${csvDataUri}\" download=\"${downloadFilename}\">⬇ Download CSV (${filtered.length.toLocaleString()} rows)</a></div>\n    </div>\n    <table>\n        <thead>\n            <tr>\n                <th>asset Number</th><th>Name</th><th>Type</th><th>Status</th>\n                <th>Admin Group</th><th>Customer</th><th>Business Service</th>\n                <th>Monitoring</th><th>Scanning</th><th>Critical</th>\n            </tr>\n        </thead>\n        <tbody>${tableRows}</tbody>\n    </table>\n    <p class=\"meta\">Data source: asset_catalog. Refreshed weekday mornings from AWS datalake via Asset Catalog Datalake Sync pipeline. Questions → [Owner].</p>\n</body>\n</html>`;\n}\n\n// --- Build filename based on most specific filter ---\nconst dateStr = new Date().toISOString().split('T')[0];\nlet filenameSlug = 'all';\nif (activeFilters.length > 0) {\n    const firstFilter = [];\n    if (formInput.asset_id?.trim()) firstFilter.push(formInput.asset_id.trim());\n    else if (formInput.asset_name?.trim()) firstFilter.push(formInput.asset_name.trim());\n    else if (formInput.admin_group?.trim()) firstFilter.push(formInput.admin_group.trim());\n    else if (formInput.asset_type?.trim()) firstFilter.push(formInput.asset_type.trim());\n    else if (formInput.status?.trim()) firstFilter.push(formInput.status.trim());\n    else if (formInput.customer?.trim()) firstFilter.push(formInput.customer.trim());\n    else if (formInput.service_groue?.trim()) firstFilter.push(formInput.service_groue.trim());\n    filenameSlug = firstFilter.join('_').replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 40);\n}\nconst htmlFilename = `asset_catalog_${filenameSlug}_${dateStr}.html`;\n\nreturn [{\n    json: { html },\n    binary: {\n        data: {\n            data: Buffer.from(html, 'utf-8').toString('base64'),\n            mimeType: 'text/html',\n            fileName: htmlFilename,\n            fileExtension: 'html'\n        }\n    }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        0
+      ],
+      "id": "fa30cf95-03b5-464a-bd32-290e1bc081db",
+      "name": "3. Filter and Format"
+    },
+    {
+      "parameters": {
+        "content": "## ENTRY POINT\nPublic form URL, org-wide access, no auth.\nUsers fill in filter fields, submit, get HTML results + CSV download.\n\nFilter semantics:\n- Text fields: partial match (contains), case-insensitive\n- Dropdowns: exact match (equals)\n\nForm URL: https://YOUR_N8N_HOST/form/YOUR_FORM_UUID",
+        "height": 544,
+        "width": 256,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -128,
+        -352
+      ],
+      "id": "566a906c-d56c-4117-b2cd-aff375769618",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_YOUR_DATA_TABLE_ID",
+          "mode": "list",
+          "cachedResultName": "asset_catalog"
+        },
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        208,
+        0
+      ],
+      "id": "008b8a6c-5792-45b1-a5d8-09e524675e63",
+      "name": "2. Get data_table asset info"
+    },
+    {
+      "parameters": {
+        "operation": "completion",
+        "respondWith": "returnBinary",
+        "completionTitle": "Results",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 2.5,
+      "position": [
+        624,
+        0
+      ],
+      "id": "5e89d80a-dbbc-4a58-a53f-f7f0ee01c77e",
+      "name": "Form"
+    },
+    {
+      "parameters": {
+        "formTitle": "Asset Catalog asset Lookup",
+        "formDescription": "Search the asset inventory. Fill in any combination of fields , leave blank to match all. Refreshed weekday mornings",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "asset_id",
+              "placeholder": "e.g. CI2052330 (partial OK)"
+            },
+            {
+              "fieldLabel": "asset_name",
+              "placeholder": "e.g. PEACF or Identity (partial OK)"
+            },
+            {
+              "fieldLabel": "admin_group",
+              "placeholder": "e.g. Platform Team, APH, IAG, ExampleCo (partial match)"
+            },
+            {
+              "fieldLabel": "asset_type",
+              "placeholder": "e.g. ManagedOS, server, storecomponent (partial match)"
+            },
+            {
+              "fieldLabel": "status",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "productive"
+                  },
+                  {
+                    "option": "created"
+                  },
+                  {
+                    "option": "provisioned"
+                  },
+                  {
+                    "option": "disposed"
+                  },
+                  {
+                    "option": "Disposed/Retired"
+                  }
+                ]
+              }
+            },
+            {
+              "fieldLabel": "service_groue",
+              "placeholder": "e.g. HABRO or Exchange (partial OK)"
+            }
+          ]
+        },
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.5,
+      "position": [
+        -32,
+        0
+      ],
+      "id": "2ddd77b0-92ba-4af2-a3e6-ce1016ee1134",
+      "name": "1. Form Query"
+    },
+    {
+      "parameters": {
+        "content": "## DATA SOURCE\nReads all ~88k rows from asset_catalog.\nNo filtering at this level ,  filtering happens in the Code node below\nfor flexibility (partial matches, multi-field combinations).",
+        "height": 384,
+        "width": 224,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        128,
+        -224
+      ],
+      "id": "52199737-dbcb-4930-90be-c7f5dd44eb17",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "## FILTER + FORMAT\n- Reads form input via $('<Form Trigger node name>')\n- Applies contains/equals logic per field\n- Builds HTML table (top N results) + embedded CSV download (full set)\n- Returns binary HTML file for Form Ending node\n- XSS-escaped output\n\nSemantics must match Asset Catalog Query API exactly for consistency.",
+        "height": 560,
+        "width": 224,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        352,
+        -368
+      ],
+      "id": "376a4c53-f4d8-40a4-b193-f6f545c122f9",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "## RESPONSE\nReturns binary HTML file to user's browser.\nDownloads with filename based on most-specific active filter.\nWorkflow is complete ,  Form Trigger + Form Ending form a complete pair.\nNo Respond to Webhook needed.",
+        "height": 560,
+        "width": 176,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        576,
+        -368
+      ],
+      "id": "7f454f95-51f7-48dd-8836-a50f645f3552",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "# Asset Catalog QUERY FORM\n\nHuman-facing query interface for the asset catalog.\nOpen to anyone in the org, no login, no API key.\n\nFlow: Form input, fetch all rows, JS filter, HTML response + CSV download\n\nPair workflow: Asset Catalog Query API (same data, JSON output for automations)\nData source: asset_catalog (populated by Asset Catalog Datalake Sync)\n\nOwner: [Owner]",
+        "height": 384,
+        "width": 416
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -560,
+        -288
+      ],
+      "id": "f0cb22cb-a1cc-4b90-8ae5-3248a8966ea5",
+      "name": "Sticky Note4"
+    }
+  ],
+  "connections": {
+    "3. Filter and Format": {
+      "main": [
+        [
+          {
+            "node": "Form",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. Get asset_catalog data": {
+      "main": [
+        [
+          {
+            "node": "3. Filter and Format",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Form": {
+      "main": [
+        []
+      ]
+    },
+    "1. Form Query": {
+      "main": [
+        [
+          {
+            "node": "2. Get data_table asset info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  }
+}
