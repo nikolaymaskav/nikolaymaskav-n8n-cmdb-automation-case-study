@@ -235,4 +235,4 @@ A few things I'd fix if I were shipping this fresh today, kept here transparentl
 ## License
 
 MIT. See LICENSE file. Use freely. Attribution appreciated but not required.
-# nikolaymaskav-n8n-cmdb-automation-case-study
+
