@@ -144,12 +144,10 @@ Beyond the code, a meaningful part of the work was cross-team coordination: scop
 
 ```
 .
-├── workflows/
+├── workflows/Asset_Catalog
 │   ├── Asset_Catalog_Sync.public.json          # Workflow 1: scheduled sync
 │   ├── Asset_Catalog_Query_Form.public.json    # Workflow 2: human-facing form
 │   └── Asset_Catalog_Query_API.public.json     # Workflow 3: machine-facing API
-├── images/
-│   └── architecture.png                        # high-level flow diagram
 └── README.md
 ```
 
