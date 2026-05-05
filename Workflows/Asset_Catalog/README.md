@@ -6,7 +6,7 @@ Built and shipped in production at a mid-sized cloud MSP. Sanitized version publ
 
 ## The problem
 
-A corporate asset catalog of roughly 88,000 records lived in an enterprise datalake. Other teams needed access to it, but the access patterns were broken in two specific ways:
+A corporate asset catalog of roughly 100k records lived in an enterprise datalake. Other teams needed access to it, but the access patterns were broken in two specific ways:
 
 - **Security teams** wanted to enrich findings from external scanning tools with asset metadata (criticality, monitoring coverage, owner, business context). They had no programmatic access. Every request became a manual data dump from the automation team.
 - **Operations and service delivery** wanted ad-hoc lookups for tickets and customer reviews. They were either asking the automation team to run queries or trying to learn unfamiliar internal tools.
