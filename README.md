@@ -162,4 +162,9 @@ Open to remote automation engineering and adjacent roles. Email and LinkedIn in 
 
 ## License
 
+<<<<<<< HEAD
 MIT. See LICENSE file.
+=======
+MIT. See LICENSE file. Use freely. Attribution appreciated but not required.
+
+>>>>>>> 37df65bc229d8d41ab3bd5bb10b05e213c68f014
